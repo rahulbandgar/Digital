@@ -1,36 +1,40 @@
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-  <div class="container">
-    <a class="navbar-brand" routerLink="/">
-      <i class="bi bi-person-check-fill me-2"></i>UserReg
-    </a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarNav">
-      <ul class="navbar-nav ms-auto">
-        <li class="nav-item">
-          <a class="nav-link" routerLink="/register" routerLinkActive="active">
-            <i class="bi bi-person-plus me-1"></i>Register
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" routerLink="/users" routerLinkActive="active">
-            <i class="bi bi-people me-1"></i>All Users
-          </a>
-        </li>
-      </ul>
+@if (isAuthPage) {
+  <router-outlet></router-outlet>
+} @else {
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+      <a class="navbar-brand" routerLink="/">
+        <i class="bi bi-person-check-fill me-2"></i>UserReg
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/register" routerLinkActive="active">
+              <i class="bi bi-person-plus me-1"></i>Register
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/users" routerLinkActive="active">
+              <i class="bi bi-people me-1"></i>All Users
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="container">
+      <router-outlet></router-outlet>
     </div>
   </div>
-</nav>
 
-<div class="page-wrapper">
-  <div class="container">
-    <router-outlet></router-outlet>
-  </div>
-</div>
-
-<footer class="bg-light border-top py-3 mt-auto">
-  <div class="container text-center text-muted small">
-    &copy; 2024 User Registration App. Built with Spring Boot &amp; Angular.
-  </div>
-</footer>
+  <footer class="bg-light border-top py-3 mt-auto">
+    <div class="container text-center text-muted small">
+      &copy; 2024 UserReg. Built with Spring Boot &amp; Angular.
+    </div>
+  </footer>
+}
