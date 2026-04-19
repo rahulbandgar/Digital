@@ -1,0 +1,83 @@
+body {
+  background-color: #f8f9fa;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.navbar-brand {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.card {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.card-header {
+  border-radius: 12px 12px 0 0 !important;
+  font-weight: 600;
+}
+
+.btn {
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.form-control,
+.form-select {
+  border-radius: 8px;
+  border: 1.5px solid #dee2e6;
+  padding: 0.5rem 0.9rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+.form-control.is-invalid {
+  border-color: #dc3545;
+}
+
+.invalid-feedback {
+  font-size: 0.8rem;
+}
+
+.table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.table thead th {
+  background-color: #0d6efd;
+  color: white;
+  font-weight: 600;
+  border: none;
+  padding: 0.9rem 1rem;
+}
+
+.table tbody tr:hover {
+  background-color: #f0f4ff;
+}
+
+.badge-pill {
+  border-radius: 50px;
+}
+
+.section-title {
+  color: #343a40;
+  font-weight: 700;
+}
+
+.alert {
+  border-radius: 10px;
+  border: none;
+}
+
+.page-wrapper {
+  min-height: calc(100vh - 56px);
+  padding: 2rem 0;
+}

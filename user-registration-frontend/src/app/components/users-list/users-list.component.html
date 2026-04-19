@@ -1,0 +1,116 @@
+<div class="row">
+  <div class="col-12">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <div>
+        <h3 class="section-title mb-1">
+          <i class="bi bi-people-fill me-2 text-primary"></i>Registered Users
+        </h3>
+        <p class="text-muted mb-0" *ngIf="!isLoading">
+          {{ users.length }} user{{ users.length !== 1 ? 's' : '' }} registered
+        </p>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary" (click)="loadUsers()" [disabled]="isLoading">
+          <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+        </button>
+        <a routerLink="/register" class="btn btn-primary">
+          <i class="bi bi-person-plus me-1"></i>Register New User
+        </a>
+      </div>
+    </div>
+
+    <!-- Error Alert -->
+    <div *ngIf="errorMessage" class="alert alert-danger d-flex align-items-center" role="alert">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>
+      <div>
+        {{ errorMessage }}
+        <button class="btn btn-sm btn-outline-danger ms-3" (click)="loadUsers()">Retry</button>
+      </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div *ngIf="isLoading" class="card">
+      <div class="card-body py-5 text-center">
+        <div class="spinner-border text-primary mb-3" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted mb-0">Loading users...</p>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="!isLoading && !errorMessage && users.length === 0" class="card">
+      <div class="card-body py-5 text-center">
+        <i class="bi bi-inbox display-3 text-muted mb-3 d-block"></i>
+        <h5 class="text-muted">No users registered yet</h5>
+        <p class="text-muted mb-4">Be the first one to register!</p>
+        <a routerLink="/register" class="btn btn-primary">
+          <i class="bi bi-person-plus me-2"></i>Register Now
+        </a>
+      </div>
+    </div>
+
+    <!-- Users Table -->
+    <div *ngIf="!isLoading && users.length > 0" class="card">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th><i class="bi bi-person me-1"></i>Name</th>
+                <th><i class="bi bi-envelope me-1"></i>Email</th>
+                <th><i class="bi bi-telephone me-1"></i>Phone</th>
+                <th><i class="bi bi-geo-alt me-1"></i>City</th>
+                <th><i class="bi bi-globe me-1"></i>Country</th>
+                <th><i class="bi bi-calendar me-1"></i>Registered On</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let user of users; let i = index">
+                <td class="text-muted small">{{ i + 1 }}</td>
+                <td>
+                  <div class="d-flex align-items-center gap-2">
+                    <div class="avatar-circle bg-primary text-white rounded-circle d-flex align-items-center justify-content-center"
+                         style="width:36px;height:36px;font-size:0.85rem;font-weight:600;flex-shrink:0">
+                      {{ user.firstName.charAt(0).toUpperCase() }}{{ user.lastName.charAt(0).toUpperCase() }}
+                    </div>
+                    <div>
+                      <div class="fw-semibold">{{ user.firstName }} {{ user.lastName }}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <a [href]="'mailto:' + user.email" class="text-decoration-none">{{ user.email }}</a>
+                </td>
+                <td>
+                  <span *ngIf="user.phone; else nophone">{{ user.phone }}</span>
+                  <ng-template #nophone><span class="text-muted">—</span></ng-template>
+                </td>
+                <td>
+                  <span *ngIf="user.city; else nocity">{{ user.city }}</span>
+                  <ng-template #nocity><span class="text-muted">—</span></ng-template>
+                </td>
+                <td>
+                  <span *ngIf="user.country; else nocountry">{{ user.country }}</span>
+                  <ng-template #nocountry><span class="text-muted">—</span></ng-template>
+                </td>
+                <td>
+                  <span class="badge bg-light text-dark border">
+                    {{ user.createdAt | date:'MMM d, y, h:mm a' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-footer text-muted small py-2 px-3">
+        Showing {{ users.length }} record{{ users.length !== 1 ? 's' : '' }}
+      </div>
+    </div>
+
+  </div>
+</div>
