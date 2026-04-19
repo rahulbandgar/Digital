@@ -1,0 +1,13 @@
+# Maven build output
+user-registration-backend/target/
+
+# Angular build cache and dependencies
+user-registration-frontend/node_modules/
+user-registration-frontend/.angular/
+user-registration-frontend/dist/
+
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
+*.class
