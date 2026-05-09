@@ -1,0 +1,23 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: blockchain-service
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+
+blockchain:
+  node-url: ${BLOCKCHAIN_NODE_URL:http://localhost:8545}
+  admin-private-key: ${BLOCKCHAIN_ADMIN_KEY:0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b2d}
+  chain-id: ${BLOCKCHAIN_CHAIN_ID:1337}
+
+jwt:
+  secret: ${JWT_SECRET:digitalAssetPlatformSecretKey2024!SuperSecureKey}
+  expiration: 86400000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
