@@ -219,12 +219,12 @@ services:
       - "8080:8080"
     environment:
       JWT_SECRET: ${JWT_SECRET:-digitalAssetPlatformSecretKey2024!SuperSecureKey}
-      SPRING_CLOUD_GATEWAY_ROUTES_0_URI: http://user-service:8081
-      SPRING_CLOUD_GATEWAY_ROUTES_1_URI: http://wallet-service:8082
-      SPRING_CLOUD_GATEWAY_ROUTES_2_URI: http://asset-service:8083
-      SPRING_CLOUD_GATEWAY_ROUTES_3_URI: http://blockchain-service:8084
-      SPRING_CLOUD_GATEWAY_ROUTES_4_URI: http://transaction-ledger-service:8085
-      SPRING_CLOUD_GATEWAY_ROUTES_5_URI: http://settlement-service:8086
+      USER_SERVICE_URL: http://user-service:8081
+      WALLET_SERVICE_URL: http://wallet-service:8082
+      ASSET_SERVICE_URL: http://asset-service:8083
+      BLOCKCHAIN_SERVICE_URL: http://blockchain-service:8084
+      LEDGER_SERVICE_URL: http://transaction-ledger-service:8085
+      SETTLEMENT_SERVICE_URL: http://settlement-service:8086
 
 volumes:
   postgres-data:
