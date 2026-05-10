@@ -65,9 +65,9 @@ services:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
 
-  # Hyperledger Besu (local Ethereum-compatible node, Clique PoA — no peers needed)
+  # Hyperledger Besu (pinned to 23.10.3 — stable Clique/dev mining support)
   besu:
-    image: hyperledger/besu:latest
+    image: hyperledger/besu:23.10.3
     container_name: dap-besu
     ports:
       - "8545:8545"
@@ -81,7 +81,7 @@ services:
       - "--rpc-http-host=0.0.0.0"
       - "--rpc-http-cors-origins=*"
       - "--host-allowlist=*"
-      - "--rpc-http-api=ETH,NET,WEB3,ADMIN"
+      - "--rpc-http-api=ETH,NET,WEB3,CLIQUE,ADMIN"
       - "--min-gas-price=0"
       - "--logging=INFO"
     healthcheck:
