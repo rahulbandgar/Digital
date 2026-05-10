@@ -78,7 +78,7 @@ services:
       - "--rpc-http-host=0.0.0.0"
       - "--rpc-http-cors-origins=*"
       - "--host-allowlist=*"
-      - "--rpc-http-api=ETH,NET,WEB3,MINER,CLIQUE"
+      - "--rpc-http-api=ETH,NET,WEB3,MINER"
       - "--logging=INFO"
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:8545 || exit 1"]
