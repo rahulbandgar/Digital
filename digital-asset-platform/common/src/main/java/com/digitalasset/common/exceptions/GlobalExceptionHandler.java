@@ -2,6 +2,7 @@ package com.digitalasset.common.exceptions;
 
 import com.digitalasset.common.dto.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -43,10 +44,17 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(reason, "HTTP_" + ex.getStatusCode().value()));
     }
 
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataAccessException(DataAccessException ex) {
+        log.error("Database error: {}", ex.getMostSpecificCause().getMessage());
+        return ResponseEntity.internalServerError()
+                .body(ApiResponse.error("A database error occurred: " + ex.getMostSpecificCause().getMessage(), "DB_ERROR"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
         log.error("Unexpected error", ex);
         return ResponseEntity.internalServerError()
-                .body(ApiResponse.error("An unexpected error occurred", "INTERNAL_ERROR"));
+                .body(ApiResponse.error("An unexpected error occurred: " + ex.getMessage(), "INTERNAL_ERROR"));
     }
 }

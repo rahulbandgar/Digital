@@ -72,7 +72,7 @@
             "listen": "test",
             "script": { "exec": [
               "var r = pm.response.json();",
-              "if (r.data && r.data.token) pm.collectionVariables.set('adminToken', r.data.token);",
+              "if (r.data && r.data.accessToken) pm.collectionVariables.set('adminToken', r.data.accessToken);",
               "pm.test('Login successful', () => pm.response.to.have.status(200));"
             ]}
           }]
@@ -92,7 +92,7 @@
             "listen": "test",
             "script": { "exec": [
               "var r = pm.response.json();",
-              "if (r.data && r.data.token) pm.collectionVariables.set('investorToken', r.data.token);",
+              "if (r.data && r.data.accessToken) pm.collectionVariables.set('investorToken', r.data.accessToken);",
               "pm.test('Login successful', () => pm.response.to.have.status(200));"
             ]}
           }]
