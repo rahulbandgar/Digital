@@ -83,6 +83,7 @@ services:
       - "--host-allowlist=*"
       - "--rpc-http-api=ETH,NET,WEB3,CLIQUE,ADMIN"
       - "--min-gas-price=0"
+      - "--p2p-enabled=false"
       - "--logging=INFO"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"net_version\",\"params\":[],\"id\":1}' http://localhost:8545 || exit 1"]
