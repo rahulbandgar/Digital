@@ -1,5 +1,21 @@
+FROM maven:3.9.5-eclipse-temurin-17 AS build
+WORKDIR /workspace
+COPY pom.xml .
+COPY common/pom.xml common/pom.xml
+COPY user-service/pom.xml user-service/pom.xml
+COPY wallet-service/pom.xml wallet-service/pom.xml
+COPY asset-service/pom.xml asset-service/pom.xml
+COPY blockchain-service/pom.xml blockchain-service/pom.xml
+COPY transaction-ledger-service/pom.xml transaction-ledger-service/pom.xml
+COPY settlement-service/pom.xml settlement-service/pom.xml
+COPY api-gateway/pom.xml api-gateway/pom.xml
+RUN mvn dependency:go-offline -B
+COPY common/src common/src
+COPY user-service/src user-service/src
+RUN mvn clean package -DskipTests -pl user-service -am
+
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
-COPY target/user-service-1.0.0.jar app.jar
+COPY --from=build /workspace/user-service/target/user-service-1.0.0.jar app.jar
 EXPOSE 8081
 ENTRYPOINT ["java", "-jar", "app.jar"]
