@@ -74,13 +74,11 @@ services:
       - "8546:8546"
     command:
       - "--network=dev"
-      - "--miner-enabled"
-      - "--miner-coinbase=0xfe3b557e8fb62b89f4916b721be55ceb828dbd73"
       - "--rpc-http-enabled"
       - "--rpc-http-host=0.0.0.0"
       - "--rpc-http-cors-origins=*"
       - "--host-allowlist=*"
-      - "--rpc-http-api=ETH,NET,WEB3,MINER"
+      - "--rpc-http-api=ETH,NET,WEB3,MINER,CLIQUE"
       - "--logging=INFO"
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:8545 || exit 1"]
