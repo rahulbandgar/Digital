@@ -65,26 +65,30 @@ services:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
 
-  # Hyperledger Besu (local Ethereum-compatible node)
+  # Hyperledger Besu (local Ethereum-compatible node, Clique PoA — no peers needed)
   besu:
     image: hyperledger/besu:latest
     container_name: dap-besu
     ports:
       - "8545:8545"
       - "8546:8546"
+    volumes:
+      - ./docker/besu:/opt/besu/config:ro
     command:
-      - "--network=dev"
+      - "--genesis-file=/opt/besu/config/genesis.json"
+      - "--node-private-key-file=/opt/besu/config/key"
       - "--rpc-http-enabled"
       - "--rpc-http-host=0.0.0.0"
       - "--rpc-http-cors-origins=*"
       - "--host-allowlist=*"
-      - "--rpc-http-api=ETH,NET,WEB3,MINER"
+      - "--rpc-http-api=ETH,NET,WEB3,CLIQUE"
+      - "--min-gas-price=0"
       - "--logging=INFO"
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:8545 || exit 1"]
-      interval: 15s
+      test: ["CMD-SHELL", "curl -sf -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"net_version\",\"params\":[],\"id\":1}' http://localhost:8545 || exit 1"]
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 12
 
 # ─── Microservices ────────────────────────────────────────────────────────────
 
