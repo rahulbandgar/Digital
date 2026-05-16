@@ -44,4 +44,16 @@ public class UserController {
                 .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "User not found with id: " + id)));
     }
+
+    @PutMapping("/{id}/kyc")
+    public ResponseEntity<?> updateKycStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String kycStatus = body.get("kycStatus");
+        if (kycStatus == null || kycStatus.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "kycStatus is required"));
+        }
+        return userService.updateKycStatus(id, kycStatus)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "User not found with id: " + id)));
+    }
 }

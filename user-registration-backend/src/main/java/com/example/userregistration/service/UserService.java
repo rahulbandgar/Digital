@@ -30,4 +30,11 @@ public class UserService {
     public Optional<User> getUserById(Long id) {
         return userRepository.findById(id);
     }
+
+    public Optional<User> updateKycStatus(Long id, String kycStatus) {
+        return userRepository.findById(id).map(user -> {
+            user.setKycStatus(kycStatus);
+            return userRepository.save(user);
+        });
+    }
 }

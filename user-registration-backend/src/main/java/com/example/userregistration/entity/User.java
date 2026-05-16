@@ -47,8 +47,14 @@ public class User {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(nullable = false)
+    private String kycStatus = "PENDING";
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
+        if (this.kycStatus == null) {
+            this.kycStatus = "PENDING";
+        }
     }
 }
