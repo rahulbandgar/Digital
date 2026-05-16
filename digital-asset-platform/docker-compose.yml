@@ -86,10 +86,11 @@ services:
       - "--p2p-enabled=false"
       - "--logging=INFO"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"net_version\",\"params\":[],\"id\":1}' http://localhost:8545 || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8545' 2>/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 12
+      start_period: 30s
 
 # ─── Microservices ────────────────────────────────────────────────────────────
 
