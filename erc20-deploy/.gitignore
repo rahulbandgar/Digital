@@ -1,3 +1,7 @@
+# Solcjs output (old artifacts — canonical artifacts are SimpleERC20.bin/.abi)
+contracts/SimpleERC20_sol_SimpleERC20.bin
+contracts/SimpleERC20_sol_SimpleERC20.abi
+
 # Maven build output
 backend/target/
 
