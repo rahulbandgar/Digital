@@ -42,10 +42,9 @@ public class AccumulatorService {
                 continue;
             }
 
-            if (!faucet.isAvailable()) {
+            if (!dryRun && !faucet.isAvailable()) {
                 log.warn("Faucet {} is not available, skipping", faucet.getName());
-                results.add(buildRecord(faucet, ClaimRecord.ClaimStatus.FAILED,
-                    ClaimRecord.ClaimStatus.FAILED.name()));
+                results.add(buildRecord(faucet, ClaimRecord.ClaimStatus.FAILED, "Faucet unreachable"));
                 continue;
             }
 
