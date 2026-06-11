@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '0 8 * * *'   # 08:00 UTC every day
   workflow_dispatch:        # allow manual trigger from GitHub mobile app
+  push:
+    branches:
+      - claude/eth-accumulation-java-zGrMy   # run on each push while iterating
+    paths:
+      - 'eth-accumulator/**'
+      - '.github/workflows/eth-claim.yml'
 
 jobs:
   claim:
