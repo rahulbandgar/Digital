@@ -43,6 +43,7 @@ public class ClaimRunner implements ApplicationRunner {
         System.out.printf("==================================%n");
         System.out.printf("Total: %d/%d faucets succeeded%n%n", successes, results.size());
 
-        SpringApplication.exit(context, () -> successes > 0 ? 0 : 1);
+        int code = SpringApplication.exit(context, () -> successes > 0 ? 0 : 1);
+        System.exit(code); // propagate so CI reflects real success/failure
     }
 }

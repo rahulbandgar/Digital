@@ -53,7 +53,8 @@ public class AccumulatorService {
             claimRepository.save(record);
             results.add(record);
 
-            log.info("Faucet {}: status={} eth={}", faucet.getName(), record.getStatus(), record.getEthAmount());
+            log.info("Faucet {}: status={} eth={} error={}", faucet.getName(),
+                record.getStatus(), record.getEthAmount(), record.getErrorMessage());
         }
 
         log.info("=== Daily claim run complete — {} faucets processed ===", results.size());

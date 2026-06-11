@@ -80,6 +80,7 @@ public class PoWFaucetClient implements FaucetClient {
             // 1. start session
             JsonNode session = post("/api/startSession?cliver=" + CLIVER,
                 Map.of("addr", walletAddress));
+            log.info("startSession response: {}", session);
             if (isFailed(session)) return failFrom(session);
 
             String sessionId = session.path("session").asText();
