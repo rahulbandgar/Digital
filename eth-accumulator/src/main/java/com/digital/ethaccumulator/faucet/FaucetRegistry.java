@@ -1,7 +1,7 @@
 package com.digital.ethaccumulator.faucet;
 
 import com.digital.ethaccumulator.config.AppConfig;
-import com.digital.ethaccumulator.pow.PoWSolver;
+import com.digital.ethaccumulator.pow.Argon2Solver;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +17,7 @@ import java.util.List;
 public class FaucetRegistry {
 
     private final AppConfig appConfig;
-    private final PoWSolver powSolver;
+    private final Argon2Solver argon2Solver;
 
     private final List<FaucetClient> clients = new ArrayList<>();
 
@@ -33,7 +33,7 @@ public class FaucetRegistry {
 
             FaucetClient client = switch (cfg.getType()) {
                 case "pow" -> new PoWFaucetClient(cfg.getName(), appConfig.getNetwork(),
-                    cfg.getUrl(), powSolver);
+                    cfg.getUrl(), argon2Solver);
                 case "api" -> new ApiKeyFaucetClient(cfg.getName(), appConfig.getNetwork(),
                     cfg.getUrl(), cfg.getApiKey());
                 default -> throw new IllegalArgumentException("Unknown faucet type: " + cfg.getType());
