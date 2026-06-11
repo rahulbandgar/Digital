@@ -39,12 +39,14 @@ jobs:
           WALLET_ADDRESS: ${{ secrets.WALLET_ADDRESS }}
           NETWORK: ${{ vars.NETWORK || 'sepolia' }}
           DRY_RUN: ${{ vars.DRY_RUN || 'false' }}
-          SEPOLIA_POW_ENABLED: 'true'
+          # Chainstack — primary API-key faucet (no captcha)
+          CHAINSTACK_ENABLED: ${{ vars.CHAINSTACK_ENABLED || 'true' }}
+          CHAINSTACK_API_KEY: ${{ secrets.CHAINSTACK_API_KEY }}
+          # pk910 PoW — off by default (captcha)
+          SEPOLIA_POW_ENABLED: ${{ vars.SEPOLIA_POW_ENABLED || 'false' }}
           HOLESKY_POW_ENABLED: ${{ vars.HOLESKY_POW_ENABLED || 'false' }}
           QUICKNODE_ENABLED: ${{ vars.QUICKNODE_ENABLED || 'false' }}
           QUICKNODE_API_KEY: ${{ secrets.QUICKNODE_API_KEY }}
-          ALCHEMY_ENABLED: ${{ vars.ALCHEMY_ENABLED || 'false' }}
-          ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
         run: |
           java -jar target/eth-accumulator-1.0.0.jar
 

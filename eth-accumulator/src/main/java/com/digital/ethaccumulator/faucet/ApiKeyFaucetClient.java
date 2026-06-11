@@ -6,14 +6,21 @@ import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Client for API-key based faucets (Alchemy, QuickNode).
- * These accept a simple POST with wallet address + API key.
+ * Client for API-key based faucets (Chainstack, Alchemy, QuickNode).
+ * These accept a simple POST with wallet address, authenticated by an API key.
+ *
+ * Chainstack: POST https://api.chainstack.com/v1/faucet/sepolia
+ *   Authorization: Bearer <key>; body {"address": "0x..."}
+ *   response: {"amountSent": <wei>, "transaction": "https://sepolia.etherscan.io/tx/0x..."}
  */
 @Slf4j
 public class ApiKeyFaucetClient implements FaucetClient {
+
+    private static final BigDecimal WEI_PER_ETH = new BigDecimal("1000000000000000000");
 
     private final String name;
     private final String network;
@@ -68,18 +75,37 @@ public class ApiKeyFaucetClient implements FaucetClient {
 
             try (Response resp = httpClient.newCall(req).execute()) {
                 String responseBody = resp.body() != null ? resp.body().string() : "";
+                log.info("{} response [{}]: {}", name, resp.code(), responseBody);
 
                 if (resp.code() == 429) {
                     return ClaimResult.rateLimited();
                 }
 
                 if (!resp.isSuccessful()) {
+                    String lower = responseBody.toLowerCase();
+                    if (lower.contains("24 hour") || lower.contains("already") || lower.contains("rate")) {
+                        return ClaimResult.rateLimited();
+                    }
                     return ClaimResult.failure("HTTP " + resp.code() + ": " + responseBody);
                 }
 
                 JsonNode json = objectMapper.readTree(responseBody);
-                String txHash = json.path("txHash").asText(json.path("transactionHash").asText(null));
-                BigDecimal amount = new BigDecimal(json.path("amount").asText("0.1"));
+
+                // tx hash: Chainstack returns a "transaction" URL; others use txHash/transactionHash
+                String txHash = firstNonBlank(
+                    json.path("txHash").asText(null),
+                    json.path("transactionHash").asText(null),
+                    extractTxHash(json.path("transaction").asText(null))
+                );
+
+                // amount: Chainstack returns amountSent in wei; others may return decimal "amount"
+                BigDecimal amount;
+                if (json.has("amountSent")) {
+                    amount = new BigDecimal(json.path("amountSent").asText("0"))
+                        .divide(WEI_PER_ETH, 18, RoundingMode.HALF_UP);
+                } else {
+                    amount = new BigDecimal(json.path("amount").asText("0.5"));
+                }
 
                 log.info("Claimed {} ETH from {} — tx: {}", amount, name, txHash);
                 return ClaimResult.success(amount, txHash, null);
@@ -89,5 +115,19 @@ public class ApiKeyFaucetClient implements FaucetClient {
             log.error("Error claiming from {}: {}", name, e.getMessage(), e);
             return ClaimResult.failure(e.getMessage());
         }
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String v : values) {
+            if (v != null && !v.isBlank() && !"null".equals(v)) return v;
+        }
+        return null;
+    }
+
+    /** Pull the 0x… tx hash out of an etherscan URL if that's what the faucet returned. */
+    private static String extractTxHash(String maybeUrl) {
+        if (maybeUrl == null) return null;
+        int idx = maybeUrl.indexOf("0x");
+        return idx >= 0 ? maybeUrl.substring(idx) : maybeUrl;
     }
 }

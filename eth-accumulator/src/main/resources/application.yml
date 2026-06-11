@@ -32,10 +32,19 @@ accumulator:
   claim-cron: ${CLAIM_CRON:0 0 8 * * ?}   # 08:00 UTC daily
 
   faucets:
+    # Chainstack — API-key auth, no captcha, no mainnet balance. 0.5 Sepolia ETH / 24h.
+    # Get a free key at https://console.chainstack.com (Profile → API keys).
+    - name: chainstack-sepolia
+      type: api
+      url: ${CHAINSTACK_FAUCET_URL:https://api.chainstack.com/v1/faucet/sepolia}
+      api-key: ${CHAINSTACK_API_KEY:}
+      enabled: ${CHAINSTACK_ENABLED:true}
+
+    # pk910 PoW — DISABLED: requires a Cloudflare/hCaptcha token, can't run unattended.
     - name: sepolia-pow-pk910
       type: pow
       url: ${SEPOLIA_POW_FAUCET_URL:https://sepolia-faucet.pk910.de}
-      enabled: ${SEPOLIA_POW_ENABLED:true}
+      enabled: ${SEPOLIA_POW_ENABLED:false}
 
     - name: holesky-pow-pk910
       type: pow
@@ -47,12 +56,6 @@ accumulator:
       url: ${QUICKNODE_FAUCET_URL:https://faucet.quicknode.com/ethereum/sepolia}
       api-key: ${QUICKNODE_API_KEY:}
       enabled: ${QUICKNODE_ENABLED:false}
-
-    - name: alchemy-sepolia
-      type: api
-      url: ${ALCHEMY_FAUCET_URL:https://sepoliafaucet.com/api/fund}
-      api-key: ${ALCHEMY_API_KEY:}
-      enabled: ${ALCHEMY_ENABLED:false}
 
 # REST API auth
 api:
