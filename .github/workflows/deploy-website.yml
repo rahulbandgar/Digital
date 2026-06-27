@@ -4,7 +4,7 @@ name: Deploy TechPulseSoft Website
 on:
   push:
     branches:
-      - main
+      - claude/professional-website-setup-mabnd3
     paths:
       - "techpulsesoft-website/**"
       - ".github/workflows/deploy-website.yml"
