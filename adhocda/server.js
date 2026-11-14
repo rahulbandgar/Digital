@@ -14,6 +14,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const PASSWORD = process.env.CHAT_PASSWORD || 'digitalasset';
 const SESSION_MS = Number(process.env.SESSION_MINUTES || 60) * 60_000; // login lasts 1 hour
 const AWAY_GRACE_MS = 2 * 60_000; // announce "left" after 2 min without a connection
+const MAX_USERS = Number(process.env.MAX_USERS) || 2; // people allowed in the chat at once
 const MAX_QUEUE = 200; // max messages held for a disconnected user
 const MAX_MSG = 2000;
 const MAX_NAME = 32;
@@ -62,6 +63,18 @@ function online() {
   return [...sessions.values()].filter((s) => s.present).map((s) => s.name);
 }
 
+// A seat is held by anyone in the room, or who just logged in and is still connecting.
+// Someone gone for longer than the away grace period gives up their seat.
+function seatsTaken(except) {
+  const now = Date.now();
+  let n = 0;
+  for (const s of sessions.values()) {
+    if (s === except) continue;
+    if (s.present || (!s.connectedOnce && s.pendingUntil > now)) n += 1;
+  }
+  return n;
+}
+
 function deliver(s, event) {
   const frame = `data: ${JSON.stringify(event)}\n\n`;
   if (s.res) s.res.write(frame);
@@ -104,6 +117,11 @@ function throttled(ip) {
 }
 
 function openStream(req, res, token, s) {
+  if (!s.present && seatsTaken(s) >= MAX_USERS) {
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' });
+    res.end(`data: ${JSON.stringify({ type: 'ended', reason: 'full' })}\n\n`);
+    return endSession(token);
+  }
   // A newer connection replaces any stale one for the same session.
   if (s.res) { const old = s.res; s.res = null; old.end(); }
   clearTimeout(s.awayTimer);
@@ -116,6 +134,7 @@ function openStream(req, res, token, s) {
   });
   res.write('retry: 3000\n\n');
   s.res = res;
+  s.connectedOnce = true;
 
   // Hand over anything that arrived while this user was disconnected, then forget it.
   for (const frame of s.queue) res.write(frame);
@@ -172,9 +191,11 @@ const server = http.createServer(async (req, res) => {
         if (s.present) return send(res, 409, { error: 'That name is already in the room' });
         endSession(t); // abandoned session with the same name
       }
+      if (seatsTaken() >= MAX_USERS) return send(res, 403, { error: 'Chat is full' });
       const token = crypto.randomBytes(24).toString('hex');
       const expiresAt = Date.now() + SESSION_MS;
-      const s = { name: clean, expiresAt, res: null, queue: [], present: false, awayTimer: null };
+      const s = { name: clean, expiresAt, res: null, queue: [], present: false, awayTimer: null,
+        connectedOnce: false, pendingUntil: Date.now() + 30_000 };
       s.expireTimer = setTimeout(() => endSession(token, 'expired'), SESSION_MS);
       sessions.set(token, s);
       return send(res, 200, { token, name: clean, expiresAt });
