@@ -1,5 +1,5 @@
 {
-  "name": "adhoc",
+  "name": "adhocda",
   "version": "1.0.0",
   "description": "Password-protected, browser-based ad-hoc chat with no message history",
   "main": "server.js",

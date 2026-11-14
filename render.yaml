@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: adhoc
+    name: adhocda
     runtime: node
     plan: free
-    rootDir: adhoc
+    rootDir: adhocda
     buildCommand: "true"
     startCommand: node server.js
     healthCheckPath: /healthz

@@ -9,7 +9,7 @@ to disk, a database, or browser storage. Refresh or leave, and the conversation 
 Requires Node.js 18+. No dependencies to install.
 
 ```bash
-cd adhoc
+cd adhocda
 npm start            # or: node server.js
 ```
 
