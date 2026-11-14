@@ -31,8 +31,7 @@
     width: 100%; max-width: 360px; background: var(--panel);
     border: 1px solid var(--border); border-radius: 12px; padding: 28px 24px;
   }
-  .card h1 { margin: 0 0 4px; font-size: 22px; }
-  .card p { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+  .card h1 { margin: 0 0 12px; font-size: 22px; }
   label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
   input {
     width: 100%; padding: 10px 12px; font: inherit; color: var(--text);
@@ -85,7 +84,6 @@
 <section id="login">
   <form class="card" id="loginForm" autocomplete="off">
     <h1>Ad-hoc Chat</h1>
-    <p>Nothing is saved. Your session lasts 1 hour; messages vanish when you leave.</p>
     <label for="name">Display name</label>
     <input id="name" maxlength="32" required>
     <label for="pwd">Password</label>
@@ -104,7 +102,7 @@
   </header>
   <div id="messages" aria-live="polite"></div>
   <form id="composer">
-    <textarea id="text" rows="1" maxlength="2000" placeholder="Type a message… (Enter to send, Shift+Enter for new line)"></textarea>
+    <textarea id="text" rows="1" maxlength="2000" placeholder="Type a message…"></textarea>
     <button type="submit">Send</button>
   </form>
 </section>
@@ -136,7 +134,7 @@
     $('status').textContent = text;
     $('status').classList.toggle('warn', !!warn);
   }
-  function sessionStatus() { setStatus('Session ends ' + time(expiresAt)); }
+  function sessionStatus() { setStatus(''); }
 
   function addNote(text) {
     const d = document.createElement('div');
@@ -177,16 +175,15 @@
     $('loginErr').textContent = msg || '';
   }
 
-  function enterChat(t, name, exp, note) {
+  function enterChat(t, name, exp) {
     token = t; me = name; expiresAt = exp;
     store.set({ token, name, expiresAt });
     $('who').textContent = 'You are ' + me;
     $('login').classList.add('hidden');
     $('chat').classList.remove('hidden');
-    addNote(note);
     sessionStatus();
     clearTimeout(expiryTimer);
-    expiryTimer = setTimeout(() => showLogin('Your 1-hour session has ended. Please join again.'), Math.max(0, expiresAt - Date.now()));
+    expiryTimer = setTimeout(() => showLogin('Session ended.'), Math.max(0, expiresAt - Date.now()));
     connect();
   }
 
@@ -197,8 +194,7 @@
     try {
       const r = await post('/api/login', { name: $('name').value, password: $('pwd').value });
       $('pwd').value = '';
-      enterChat(r.token, r.name, r.expiresAt,
-        'Connected. No history is kept — only messages sent after you joined appear.');
+      enterChat(r.token, r.name, r.expiresAt);
       $('text').focus();
     } catch (err) {
       $('loginErr').textContent = err.message;
@@ -217,8 +213,7 @@
       if (m.type === 'msg') addMsg(m);
       else if (m.type === 'system') addNote(m.text + ' · ' + time(m.ts));
       else if (m.type === 'users') $('who').textContent = 'You are ' + me + ' · Online (' + m.users.length + '): ' + m.users.join(', ');
-      else if (m.type === 'ended') showLogin(m.reason === 'expired'
-        ? 'Your 1-hour session has ended. Please join again.' : 'Session ended.');
+      else if (m.type === 'ended') showLogin('Session ended.');
     };
     es.onerror = () => { closeStream(); scheduleReconnect(); };
   }
@@ -234,7 +229,7 @@
         await post('/api/session', { token });
         connect();
       } catch (err) {
-        if (err.status === 401) return showLogin('Your session has ended. Please join again.');
+        if (err.status === 401) return showLogin('Session ended.');
         retryDelay = Math.min(retryDelay * 2, 15000);
         scheduleReconnect();
       }
@@ -243,7 +238,7 @@
 
   function wake() {
     if (!token) return;
-    if (Date.now() >= expiresAt) return showLogin('Your 1-hour session has ended. Please join again.');
+    if (Date.now() >= expiresAt) return showLogin('Session ended.');
     if (!es || es.readyState === EventSource.CLOSED) { retryDelay = 1000; scheduleReconnect(true); }
   }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wake(); });
@@ -257,9 +252,9 @@
     $('text').value = ''; resize();
     try { await post('/api/send', { token, text: t }); }
     catch (err) {
-      if (err.status === 401) return showLogin('Your session has ended. Please join again.');
+      if (err.status === 401) return showLogin('Session ended.');
       $('text').value = t; resize();
-      addNote('Not sent — check your connection and try again.');
+      addNote('Not sent');
     }
   });
 
@@ -280,7 +275,7 @@
     if (!saved || !saved.token || saved.expiresAt <= Date.now()) { store.clear(); return; }
     try {
       const r = await post('/api/session', { token: saved.token });
-      enterChat(saved.token, r.name, r.expiresAt, 'Reconnected.');
+      enterChat(saved.token, r.name, r.expiresAt);
     } catch { store.clear(); }
   })();
 })();
