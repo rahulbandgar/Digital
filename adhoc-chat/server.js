@@ -11,6 +11,16 @@ const PORT = Number(process.env.PORT) || 3000;
 const PASSWORD = process.env.CHAT_PASSWORD || 'digitalasset';
 const MAX_MSG = 2000;
 const MAX_NAME = 32;
+// Behind a hosting proxy (Render, Fly, Railway...), trust X-Forwarded-For for client IP.
+const TRUST_PROXY = process.env.TRUST_PROXY === '1' || !!process.env.RENDER || !!process.env.FLY_APP_NAME;
+
+function clientIp(req) {
+  if (TRUST_PROXY) {
+    const xff = req.headers['x-forwarded-for'];
+    if (xff) return String(xff).split(',')[0].trim();
+  }
+  return req.socket.remoteAddress;
+}
 
 const INDEX = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
 
@@ -73,7 +83,7 @@ function throttled(ip) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  const ip = req.socket.remoteAddress;
+  const ip = clientIp(req);
 
   try {
     if (req.method === 'GET' && url.pathname === '/') {
@@ -84,6 +94,10 @@ const server = http.createServer(async (req, res) => {
         'Referrer-Policy': 'no-referrer',
       });
       return res.end(INDEX);
+    }
+
+    if (req.method === 'GET' && url.pathname === '/healthz') {
+      return send(res, 200, { ok: true });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/login') {
@@ -144,6 +158,6 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Ad-hoc chat running on http://localhost:${PORT}`);
 });
