@@ -24,6 +24,14 @@ Share the URL (e.g. `http://<your-ip>:3000`) with others on your network to chat
 | `CHAT_PASSWORD` | `digitalasset` | Password to join chat |
 | `SESSION_MINUTES` | `60`         | How long a login lasts |
 | `MAX_USERS`     | `2`            | People allowed in the chat at once |
+| `ADMIN_PASSWORD` | _(unset)_     | Password for `/admin`; admin page is disabled until set |
+
+## Admin page
+
+Open `/admin` (e.g. `http://localhost:3000/admin`) and sign in with `ADMIN_PASSWORD`.
+It lists everyone in the chat (online, away, or not connected) and lets you remove a
+person or everyone. Removed people see "You were removed from the chat" and are returned
+to the login screen. Run locally with: `ADMIN_PASSWORD=yourpass npm start`.
 
 ## How it works
 

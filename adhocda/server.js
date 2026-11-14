@@ -30,6 +30,29 @@ function clientIp(req) {
 }
 
 const INDEX = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
+const ADMIN = fs.readFileSync(path.join(__dirname, 'public', 'admin.html'));
+// Admin page is disabled unless ADMIN_PASSWORD is set.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const ADMIN_SESSION_MS = 60 * 60_000;
+// admin token -> expiresAt
+const adminTokens = new Map();
+
+function isAdmin(token) {
+  const exp = adminTokens.get(token);
+  if (!exp) return false;
+  if (exp < Date.now()) { adminTokens.delete(token); return false; }
+  return true;
+}
+
+function servePage(res, body) {
+  res.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+  });
+  res.end(body);
+}
 
 // token -> { name, expiresAt, res, queue, present, expireTimer, awayTimer }
 const sessions = new Map();
@@ -176,6 +199,44 @@ const server = http.createServer(async (req, res) => {
       return res.end(INDEX);
     }
 
+    if (req.method === 'GET' && (url.pathname === '/admin' || url.pathname === '/admin/')) {
+      return servePage(res, ADMIN);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/admin/login') {
+      if (!ADMIN_PASSWORD) return send(res, 503, { error: 'Admin is not set up' });
+      if (throttled(ip)) return send(res, 429, { error: 'Too many attempts. Wait a minute.' });
+      const { password } = await readJson(req);
+      if (!safeEqual(password || '', ADMIN_PASSWORD)) return send(res, 401, { error: 'Wrong password' });
+      const token = crypto.randomBytes(24).toString('hex');
+      adminTokens.set(token, Date.now() + ADMIN_SESSION_MS);
+      return send(res, 200, { token });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/admin/users') {
+      const { token } = await readJson(req);
+      if (!isAdmin(token)) return send(res, 401, { error: 'Not signed in' });
+      const users = [...sessions.values()].map((s) => ({
+        id: s.id, name: s.name, joinedAt: s.joinedAt, expiresAt: s.expiresAt,
+        status: s.res ? 'online' : s.present ? 'away' : 'offline',
+      }));
+      return send(res, 200, { users, maxUsers: MAX_USERS });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/admin/remove') {
+      const { token, id } = await readJson(req);
+      if (!isAdmin(token)) return send(res, 401, { error: 'Not signed in' });
+      const ids = id === '*' ? null : new Set([id]);
+      for (const [t, s] of [...sessions]) if (!ids || ids.has(s.id)) endSession(t, 'removed');
+      return send(res, 200, { ok: true });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/admin/logout') {
+      const { token } = await readJson(req);
+      adminTokens.delete(token);
+      return send(res, 200, { ok: true });
+    }
+
     if (req.method === 'GET' && url.pathname === '/healthz') {
       return send(res, 200, { ok: true });
     }
@@ -194,7 +255,7 @@ const server = http.createServer(async (req, res) => {
       if (seatsTaken() >= MAX_USERS) return send(res, 403, { error: 'Chat is full' });
       const token = crypto.randomBytes(24).toString('hex');
       const expiresAt = Date.now() + SESSION_MS;
-      const s = { name: clean, expiresAt, res: null, queue: [], present: false, awayTimer: null,
+      const s = { id: crypto.randomBytes(8).toString('hex'), joinedAt: Date.now(), name: clean, expiresAt, res: null, queue: [], present: false, awayTimer: null,
         connectedOnce: false, pendingUntil: Date.now() + 30_000 };
       s.expireTimer = setTimeout(() => endSession(token, 'expired'), SESSION_MS);
       sessions.set(token, s);

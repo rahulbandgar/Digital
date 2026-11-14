@@ -213,7 +213,7 @@
       if (m.type === 'msg') addMsg(m);
       else if (m.type === 'system') addNote(m.text + ' · ' + time(m.ts));
       else if (m.type === 'users') $('who').textContent = 'You are ' + me + ' · Online (' + m.users.length + '): ' + m.users.join(', ');
-      else if (m.type === 'ended') showLogin(m.reason === 'full' ? 'Chat is full' : 'Session ended.');
+      else if (m.type === 'ended') showLogin(m.reason === 'full' ? 'Chat is full' : m.reason === 'removed' ? 'You were removed from the chat' : 'Session ended.');
     };
     es.onerror = () => { closeStream(); scheduleReconnect(); };
   }
