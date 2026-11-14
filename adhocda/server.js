@@ -1,6 +1,9 @@
 'use strict';
 // Ad-hoc chat server: zero dependencies, no persistence.
-// Messages are relayed to connected clients and immediately forgotten.
+// Messages are relayed to connected clients and never written anywhere.
+// The only buffering is a small per-user, in-memory queue that holds messages
+// while that user's connection is briefly down (e.g. phone switched apps);
+// it is emptied as soon as they reconnect and discarded when they log out.
 
 const http = require('http');
 const fs = require('fs');
@@ -9,6 +12,9 @@ const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PASSWORD = process.env.CHAT_PASSWORD || 'digitalasset';
+const SESSION_MS = Number(process.env.SESSION_MINUTES || 60) * 60_000; // login lasts 1 hour
+const AWAY_GRACE_MS = 2 * 60_000; // announce "left" after 2 min without a connection
+const MAX_QUEUE = 200; // max messages held for a disconnected user
 const MAX_MSG = 2000;
 const MAX_NAME = 32;
 // Behind a hosting proxy (Render, Fly, Railway...), trust X-Forwarded-For for client IP.
@@ -24,7 +30,7 @@ function clientIp(req) {
 
 const INDEX = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
 
-// token -> { name, res (SSE response or null), timer }
+// token -> { name, expiresAt, res, queue, present, expireTimer, awayTimer }
 const sessions = new Map();
 // ip -> { count, resetAt } for basic login throttling
 const attempts = new Map();
@@ -36,9 +42,8 @@ function safeEqual(a, b) {
 }
 
 function send(res, status, obj) {
-  const body = JSON.stringify(obj);
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-  res.end(body);
+  res.end(JSON.stringify(obj));
 }
 
 function readJson(req) {
@@ -54,22 +59,39 @@ function readJson(req) {
 }
 
 function online() {
-  return [...sessions.values()].filter((s) => s.res).map((s) => s.name);
+  return [...sessions.values()].filter((s) => s.present).map((s) => s.name);
+}
+
+function deliver(s, event) {
+  const frame = `data: ${JSON.stringify(event)}\n\n`;
+  if (s.res) s.res.write(frame);
+  else if (event.type !== 'users') {
+    s.queue.push(frame);
+    if (s.queue.length > MAX_QUEUE) s.queue.shift();
+  }
 }
 
 function broadcast(event) {
-  const frame = `data: ${JSON.stringify(event)}\n\n`;
-  for (const s of sessions.values()) if (s.res) s.res.write(frame);
+  for (const s of sessions.values()) deliver(s, event);
 }
 
-function endSession(token) {
+function announceUsers() {
+  broadcast({ type: 'users', users: online() });
+}
+
+function endSession(token, reason) {
   const s = sessions.get(token);
   if (!s) return;
-  clearTimeout(s.timer);
+  clearTimeout(s.expireTimer);
+  clearTimeout(s.awayTimer);
   sessions.delete(token);
   if (s.res) {
+    if (reason) s.res.write(`data: ${JSON.stringify({ type: 'ended', reason })}\n\n`);
+    s.res.end();
+  }
+  if (s.present) {
     broadcast({ type: 'system', text: `${s.name} left`, ts: Date.now() });
-    broadcast({ type: 'users', users: online() });
+    announceUsers();
   }
 }
 
@@ -79,6 +101,45 @@ function throttled(ip) {
   if (!a || a.resetAt < now) { attempts.set(ip, { count: 1, resetAt: now + 60_000 }); return false; }
   a.count += 1;
   return a.count > 10;
+}
+
+function openStream(req, res, token, s) {
+  // A newer connection replaces any stale one for the same session.
+  if (s.res) { const old = s.res; s.res = null; old.end(); }
+  clearTimeout(s.awayTimer);
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-store',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write('retry: 3000\n\n');
+  s.res = res;
+
+  // Hand over anything that arrived while this user was disconnected, then forget it.
+  for (const frame of s.queue) res.write(frame);
+  s.queue = [];
+
+  if (!s.present) {
+    s.present = true;
+    broadcast({ type: 'system', text: `${s.name} joined`, ts: Date.now() });
+  }
+  announceUsers();
+
+  const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
+  req.on('close', () => {
+    clearInterval(ping);
+    if (s.res !== res) return; // already replaced by a newer connection
+    s.res = null;
+    if (!sessions.has(token)) return;
+    s.awayTimer = setTimeout(() => {
+      if (s.res || !sessions.has(token)) return;
+      s.present = false;
+      broadcast({ type: 'system', text: `${s.name} left`, ts: Date.now() });
+      announceUsers();
+    }, AWAY_GRACE_MS);
+  });
 }
 
 const server = http.createServer(async (req, res) => {
@@ -106,40 +167,37 @@ const server = http.createServer(async (req, res) => {
       if (!safeEqual(password || '', PASSWORD)) return send(res, 401, { error: 'Wrong password' });
       const clean = String(name || '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME);
       if (!clean) return send(res, 400, { error: 'Enter a display name' });
-      if (online().some((n) => n.toLowerCase() === clean.toLowerCase())) {
-        return send(res, 409, { error: 'That name is already in the room' });
+      for (const [t, s] of sessions) {
+        if (s.name.toLowerCase() !== clean.toLowerCase()) continue;
+        if (s.present) return send(res, 409, { error: 'That name is already in the room' });
+        endSession(t); // abandoned session with the same name
       }
       const token = crypto.randomBytes(24).toString('hex');
-      // Token must open a stream within 30s or it expires.
-      const timer = setTimeout(() => endSession(token), 30_000);
-      sessions.set(token, { name: clean, res: null, timer });
-      return send(res, 200, { token, name: clean });
+      const expiresAt = Date.now() + SESSION_MS;
+      const s = { name: clean, expiresAt, res: null, queue: [], present: false, awayTimer: null };
+      s.expireTimer = setTimeout(() => endSession(token, 'expired'), SESSION_MS);
+      sessions.set(token, s);
+      return send(res, 200, { token, name: clean, expiresAt });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/session') {
+      const { token } = await readJson(req);
+      const s = sessions.get(token);
+      if (!s) return send(res, 401, { error: 'Session ended' });
+      return send(res, 200, { name: s.name, expiresAt: s.expiresAt });
     }
 
     if (req.method === 'GET' && url.pathname === '/api/stream') {
       const token = url.searchParams.get('token');
       const s = sessions.get(token);
-      if (!s || s.res) return send(res, 401, { error: 'Invalid session' });
-      clearTimeout(s.timer);
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-store',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no',
-      });
-      res.write(': connected\n\n');
-      s.res = res;
-      const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
-      req.on('close', () => { clearInterval(ping); endSession(token); });
-      broadcast({ type: 'system', text: `${s.name} joined`, ts: Date.now() });
-      broadcast({ type: 'users', users: online() });
-      return;
+      if (!s) return send(res, 401, { error: 'Session ended' });
+      return openStream(req, res, token, s);
     }
 
     if (req.method === 'POST' && url.pathname === '/api/send') {
       const { token, text } = await readJson(req);
       const s = sessions.get(token);
-      if (!s || !s.res) return send(res, 401, { error: 'Session ended' });
+      if (!s) return send(res, 401, { error: 'Session ended' });
       const msg = String(text || '').trim().slice(0, MAX_MSG);
       if (!msg) return send(res, 400, { error: 'Empty message' });
       broadcast({ type: 'msg', from: s.name, text: msg, ts: Date.now() });
