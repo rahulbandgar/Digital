@@ -31,8 +31,8 @@ function clientIp(req) {
 
 const INDEX = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
 const ADMIN = fs.readFileSync(path.join(__dirname, 'public', 'admin.html'));
-// Admin page is disabled unless ADMIN_PASSWORD is set.
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+// Admin password (override with the ADMIN_PASSWORD env var).
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'lalgun';
 const ADMIN_SESSION_MS = 60 * 60_000;
 // admin token -> expiresAt
 const adminTokens = new Map();
