@@ -1,9 +1,9 @@
 # Ad-hoc Chat
 
-A password-protected chat for two people that runs in any browser. Only the **last
-10 minutes** of messages exist: anything older is deleted continuously, from the server's
-memory and from everyone's screen. Nothing is ever written to disk or a database, and a
-server restart wipes everything.
+A password-protected chat for two people that runs in any browser. Messages are kept
+for **8 hours**, then deleted from the server's memory and from everyone's screen, and
+each login lasts 8 hours. Nothing is ever written to disk or a database, and a server
+restart wipes everything.
 
 ## Run
 
@@ -25,8 +25,7 @@ Share the URL (e.g. `http://<your-ip>:3000`) with the other person.
 | `CHAT_PASSWORD`  | `digitalasset` | Password to join |
 | `ADMIN_PASSWORD` | `lalgun`       | Password for the `/admin` page |
 | `MAX_USERS`      | `2`            | People allowed in at once |
-| `KEEP_MINUTES`   | `10`           | How long messages are kept before being deleted |
-| `IDLE_MINUTES`   | `30`           | Log out someone who has had no connection this long |
+| `SESSION_HOURS`  | `8`            | How long a login lasts and how long messages are kept |
 
 ## Admin page
 
@@ -40,13 +39,13 @@ everyone. Removed people see "You were removed" and return to the login screen.
   login gets an in-memory session token (kept in that browser tab's `sessionStorage`
   so a reloaded tab can resume).
 - Live updates use Server-Sent Events (`/api/stream`); messages are sent via `/api/send`.
-- Every message is numbered and kept in memory for 10 minutes. When someone joins,
-  reloads, or reconnects, they receive whatever they haven't seen from the last 10 minutes.
+- Every message is numbered and kept in memory for 8 hours. When someone joins,
+  reloads, or reconnects, they receive whatever they haven't seen from the last 8 hours.
   This also covers phones that silently drop the connection while in another app.
 - Pages reconnect automatically: always on returning to the app, and whenever the
   20-second heartbeat goes quiet.
-- There is no fixed session length. You stay logged in until you click Leave, the admin
-  removes you, or you've had no connection for 30 minutes.
+- A login lasts 8 hours, then you're returned to the login screen. Switching apps or a
+  dropped connection doesn't log you out. Leave or admin removal ends it sooner.
 - Others see you as "left" after 2 minutes without a connection, which also frees your
   seat. Only 2 people can be in at once; a third sees "Full".
 - Login attempts are throttled (10/minute per IP); duplicate names are rejected.

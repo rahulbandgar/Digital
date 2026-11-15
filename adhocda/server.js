@@ -1,9 +1,9 @@
 'use strict';
 // Ad-hoc chat server: zero dependencies, no persistence.
 // Messages are relayed to connected clients and never written anywhere.
-// The last 10 minutes of messages are kept in memory only, so people who join,
-// reload, or come back from another app can catch up. Anything older than
-// 10 minutes is deleted continuously. A server restart wipes everything.
+// Messages are kept in memory only (never on disk) for 8 hours, so people who
+// join, reload, or come back from another app can catch up. Anything older is
+// deleted continuously. A server restart wipes everything.
 
 const http = require('http');
 const fs = require('fs');
@@ -12,11 +12,11 @@ const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PASSWORD = process.env.CHAT_PASSWORD || 'digitalasset';
-const KEEP_MS = Number(process.env.KEEP_MINUTES || 10) * 60_000; // messages are deleted after 10 minutes
-const IDLE_MS = Number(process.env.IDLE_MINUTES || 30) * 60_000; // log out after 30 min without a connection
+const SESSION_MS = Number(process.env.SESSION_HOURS || 8) * 3_600_000; // login lasts 8 hours
+const KEEP_MS = SESSION_MS; // messages are deleted after the same 8 hours
 const AWAY_GRACE_MS = 2 * 60_000; // announce "left" after 2 min without a connection
 const MAX_USERS = Number(process.env.MAX_USERS) || 2; // people allowed in the chat at once
-const MAX_HISTORY = 2000; // safety cap on kept messages
+const MAX_HISTORY = 20000; // safety cap on kept messages
 const MAX_MSG = 2000;
 const MAX_NAME = 32;
 // Behind a hosting proxy (Render, Fly, Railway...), trust X-Forwarded-For for client IP.
@@ -55,9 +55,9 @@ function servePage(res, body) {
   res.end(body);
 }
 
-// token -> { name, res, present, idleTimer, awayTimer }
+// token -> { name, res, present, expiresAt, expireTimer, awayTimer }
 let seq = 0; // global event number
-// Recent messages: [{ id, ts, frame }], oldest first; pruned to the last 10 minutes.
+// Recent messages: [{ id, ts, frame }], oldest first; pruned to the last 8 hours.
 const history = [];
 
 function pruneHistory() {
@@ -130,7 +130,7 @@ function announceUsers() {
 function endSession(token, reason) {
   const s = sessions.get(token);
   if (!s) return;
-  clearTimeout(s.idleTimer);
+  clearTimeout(s.expireTimer);
   clearTimeout(s.awayTimer);
   sessions.delete(token);
   if (s.res) {
@@ -160,7 +160,6 @@ function openStream(req, res, token, s, since) {
   // A newer connection replaces any stale one for the same session.
   if (s.res) { const old = s.res; s.res = null; old.end(); }
   clearTimeout(s.awayTimer);
-  clearTimeout(s.idleTimer);
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -172,7 +171,7 @@ function openStream(req, res, token, s, since) {
   s.res = res;
   s.connectedOnce = true;
 
-  // Server clock, so the page can drop messages older than 10 minutes.
+  // Server clock, so the page can drop messages older than 8 hours.
   res.write(`data: ${JSON.stringify({ type: 'hello', now: Date.now(), keepMs: KEEP_MS })}\n\n`);
   // Catch up on recent messages this browser hasn't seen yet.
   pruneHistory();
@@ -191,7 +190,6 @@ function openStream(req, res, token, s, since) {
     if (s.res !== res) return; // already replaced by a newer connection
     s.res = null;
     if (!sessions.has(token)) return;
-    s.idleTimer = setTimeout(() => endSession(token), IDLE_MS);
     s.awayTimer = setTimeout(() => {
       if (s.res || !sessions.has(token)) return;
       s.present = false;
@@ -273,7 +271,8 @@ const server = http.createServer(async (req, res) => {
       const token = crypto.randomBytes(24).toString('hex');
       const s = { id: crypto.randomBytes(8).toString('hex'), joinedAt: Date.now(), name: clean, res: null,
         present: false, awayTimer: null, connectedOnce: false, pendingUntil: Date.now() + 30_000 };
-      s.idleTimer = setTimeout(() => endSession(token), IDLE_MS);
+      s.expiresAt = Date.now() + SESSION_MS;
+      s.expireTimer = setTimeout(() => endSession(token, 'expired'), SESSION_MS);
       sessions.set(token, s);
       return send(res, 200, { token, name: clean });
     }

@@ -115,7 +115,7 @@
   let token = null, me = null, es = null;
   let lastSeq = 0, lastSeen = 0; // delivery tracking
   let retryTimer = null, retryDelay = 1000;
-  let clockOffset = 0, keepMs = 10 * 60_000; // server clock offset; messages older than keepMs are removed
+  let clockOffset = 0, keepMs = 8 * 3_600_000; // server clock offset; messages older than keepMs are removed
   const $ = (id) => document.getElementById(id);
   const store = {
     get() { try { return JSON.parse(sessionStorage.getItem('adhocda') || 'null'); } catch { return null; } },
@@ -248,7 +248,7 @@
     // one can look open but be dead. Anything missed is re-sent by the server.
     closeStream(); retryDelay = 1000; scheduleReconnect(true);
   }
-  // Remove anything older than 10 minutes from the screen.
+  // Remove messages older than the server's keep window (8 hours) from the screen.
   function pruneOld() {
     const cutoff = Date.now() + clockOffset - keepMs;
     for (const el of $('messages').querySelectorAll('[data-ts]')) {
