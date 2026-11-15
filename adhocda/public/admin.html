@@ -135,7 +135,7 @@
       name.append(dot, document.createTextNode(u.name));
       const meta = document.createElement('div'); meta.className = 'meta';
       const label = { online: 'Online', away: 'Away', offline: 'Not connected' }[u.status];
-      meta.textContent = label + ' · joined ' + time(u.joinedAt) + ' · session ends ' + time(u.expiresAt);
+      meta.textContent = label + ' · joined ' + time(u.joinedAt);
       info.append(name, meta);
       const btn = document.createElement('button'); btn.className = 'danger'; btn.type = 'button';
       btn.textContent = 'Remove';

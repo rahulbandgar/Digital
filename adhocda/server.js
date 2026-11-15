@@ -1,10 +1,9 @@
 'use strict';
 // Ad-hoc chat server: zero dependencies, no persistence.
 // Messages are relayed to connected clients and never written anywhere.
-// For reliable delivery each event is numbered and held in memory per user
-// until that user's browser confirms it arrived (a phone in the background can
-// leave a dead connection that silently swallows messages). Confirmed events
-// are dropped immediately; everything is discarded when the user logs out.
+// The last 10 minutes of messages are kept in memory only, so people who join,
+// reload, or come back from another app can catch up. Anything older than
+// 10 minutes is deleted continuously. A server restart wipes everything.
 
 const http = require('http');
 const fs = require('fs');
@@ -13,10 +12,11 @@ const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PASSWORD = process.env.CHAT_PASSWORD || 'digitalasset';
-const SESSION_MS = Number(process.env.SESSION_MINUTES || 60) * 60_000; // login lasts 1 hour
+const KEEP_MS = Number(process.env.KEEP_MINUTES || 10) * 60_000; // messages are deleted after 10 minutes
+const IDLE_MS = Number(process.env.IDLE_MINUTES || 30) * 60_000; // log out after 30 min without a connection
 const AWAY_GRACE_MS = 2 * 60_000; // announce "left" after 2 min without a connection
 const MAX_USERS = Number(process.env.MAX_USERS) || 2; // people allowed in the chat at once
-const MAX_OUTBOX = 500; // max unconfirmed events held per user
+const MAX_HISTORY = 2000; // safety cap on kept messages
 const MAX_MSG = 2000;
 const MAX_NAME = 32;
 // Behind a hosting proxy (Render, Fly, Railway...), trust X-Forwarded-For for client IP.
@@ -55,8 +55,18 @@ function servePage(res, body) {
   res.end(body);
 }
 
-// token -> { name, expiresAt, res, outbox, present, expireTimer, awayTimer }
+// token -> { name, res, present, idleTimer, awayTimer }
 let seq = 0; // global event number
+// Recent messages: [{ id, ts, frame }], oldest first; pruned to the last 10 minutes.
+const history = [];
+
+function pruneHistory() {
+  const cutoff = Date.now() - KEEP_MS;
+  let i = 0;
+  while (i < history.length && history[i].ts < cutoff) i += 1;
+  if (i) history.splice(0, i);
+}
+setInterval(pruneHistory, 5_000).unref();
 const sessions = new Map();
 // ip -> { count, resetAt } for basic login throttling
 const attempts = new Map();
@@ -100,29 +110,17 @@ function seatsTaken(except) {
   return n;
 }
 
-function deliver(s, event) {
-  if (event.id === undefined) { // presence updates are sent live only
-    if (s.res) s.res.write(`data: ${JSON.stringify(event)}\n\n`);
-    return;
-  }
-  const frame = `id: ${event.id}\ndata: ${JSON.stringify(event)}\n\n`;
-  s.outbox.push({ id: event.id, frame });
-  if (s.outbox.length > MAX_OUTBOX) s.outbox.shift();
-  if (s.res) s.res.write(frame);
-}
-
 function broadcast(event) {
-  if (event.type === 'msg' || event.type === 'system') event.id = ++seq;
-  for (const s of sessions.values()) deliver(s, event);
-}
-
-// Browser confirmed it has everything up to `upTo`: forget those events.
-function ack(s, upTo) {
-  const n = Number(upTo);
-  if (!Number.isFinite(n) || n <= 0) return;
-  let i = 0;
-  while (i < s.outbox.length && s.outbox[i].id <= n) i += 1;
-  if (i) s.outbox.splice(0, i);
+  let frame;
+  if (event.type === 'msg' || event.type === 'system') {
+    event.id = ++seq;
+    frame = `id: ${event.id}\ndata: ${JSON.stringify(event)}\n\n`;
+    history.push({ id: event.id, ts: event.ts, frame });
+    if (history.length > MAX_HISTORY) history.shift();
+  } else {
+    frame = `data: ${JSON.stringify(event)}\n\n`; // presence updates are live only
+  }
+  for (const s of sessions.values()) if (s.res) s.res.write(frame);
 }
 
 function announceUsers() {
@@ -132,7 +130,7 @@ function announceUsers() {
 function endSession(token, reason) {
   const s = sessions.get(token);
   if (!s) return;
-  clearTimeout(s.expireTimer);
+  clearTimeout(s.idleTimer);
   clearTimeout(s.awayTimer);
   sessions.delete(token);
   if (s.res) {
@@ -162,6 +160,7 @@ function openStream(req, res, token, s, since) {
   // A newer connection replaces any stale one for the same session.
   if (s.res) { const old = s.res; s.res = null; old.end(); }
   clearTimeout(s.awayTimer);
+  clearTimeout(s.idleTimer);
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -173,9 +172,12 @@ function openStream(req, res, token, s, since) {
   s.res = res;
   s.connectedOnce = true;
 
-  // Re-send everything this browser hasn't confirmed yet.
-  ack(s, since);
-  for (const e of s.outbox) res.write(e.frame);
+  // Server clock, so the page can drop messages older than 10 minutes.
+  res.write(`data: ${JSON.stringify({ type: 'hello', now: Date.now(), keepMs: KEEP_MS })}\n\n`);
+  // Catch up on recent messages this browser hasn't seen yet.
+  pruneHistory();
+  const after = Number(since) || 0;
+  for (const e of history) if (e.id > after) res.write(e.frame);
 
   if (!s.present) {
     s.present = true;
@@ -189,6 +191,7 @@ function openStream(req, res, token, s, since) {
     if (s.res !== res) return; // already replaced by a newer connection
     s.res = null;
     if (!sessions.has(token)) return;
+    s.idleTimer = setTimeout(() => endSession(token), IDLE_MS);
     s.awayTimer = setTimeout(() => {
       if (s.res || !sessions.has(token)) return;
       s.present = false;
@@ -231,7 +234,7 @@ const server = http.createServer(async (req, res) => {
       const { token } = await readJson(req);
       if (!isAdmin(token)) return send(res, 401, { error: 'Not signed in' });
       const users = [...sessions.values()].map((s) => ({
-        id: s.id, name: s.name, joinedAt: s.joinedAt, expiresAt: s.expiresAt,
+        id: s.id, name: s.name, joinedAt: s.joinedAt,
         status: s.res ? 'online' : s.present ? 'away' : 'offline',
       }));
       return send(res, 200, { users, maxUsers: MAX_USERS });
@@ -268,19 +271,18 @@ const server = http.createServer(async (req, res) => {
       }
       if (seatsTaken() >= MAX_USERS) return send(res, 403, { error: 'Full' });
       const token = crypto.randomBytes(24).toString('hex');
-      const expiresAt = Date.now() + SESSION_MS;
-      const s = { id: crypto.randomBytes(8).toString('hex'), joinedAt: Date.now(), name: clean, expiresAt, res: null, outbox: [], present: false, awayTimer: null,
-        connectedOnce: false, pendingUntil: Date.now() + 30_000 };
-      s.expireTimer = setTimeout(() => endSession(token, 'expired'), SESSION_MS);
+      const s = { id: crypto.randomBytes(8).toString('hex'), joinedAt: Date.now(), name: clean, res: null,
+        present: false, awayTimer: null, connectedOnce: false, pendingUntil: Date.now() + 30_000 };
+      s.idleTimer = setTimeout(() => endSession(token), IDLE_MS);
       sessions.set(token, s);
-      return send(res, 200, { token, name: clean, expiresAt });
+      return send(res, 200, { token, name: clean });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/session') {
       const { token } = await readJson(req);
       const s = sessions.get(token);
       if (!s) return send(res, 401, { error: 'Session ended' });
-      return send(res, 200, { name: s.name, expiresAt: s.expiresAt });
+      return send(res, 200, { name: s.name });
     }
 
     if (req.method === 'GET' && url.pathname === '/api/stream') {
@@ -291,21 +293,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/api/send') {
-      const { token, text, ack: upTo } = await readJson(req);
+      const { token, text } = await readJson(req);
       const s = sessions.get(token);
       if (!s) return send(res, 401, { error: 'Session ended' });
-      ack(s, upTo);
       const msg = String(text || '').trim().slice(0, MAX_MSG);
       if (!msg) return send(res, 400, { error: 'Empty message' });
       broadcast({ type: 'msg', from: s.name, text: msg, ts: Date.now() });
-      return send(res, 200, { ok: true });
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/ack') {
-      const { token, seq: upTo } = await readJson(req);
-      const s = sessions.get(token);
-      if (!s) return send(res, 401, { error: 'Session ended' });
-      ack(s, upTo);
       return send(res, 200, { ok: true });
     }
 

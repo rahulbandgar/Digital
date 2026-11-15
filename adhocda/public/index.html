@@ -112,9 +112,10 @@
   // Chat messages live only in this page. The session token is kept in
   // sessionStorage (this tab only) so a phone that reloads the tab after
   // switching apps can resume without re-entering the password.
-  let token = null, me = null, expiresAt = 0, es = null;
-  let lastSeq = 0, ackedSeq = 0, lastSeen = 0; // delivery tracking
-  let retryTimer = null, retryDelay = 1000, expiryTimer = null;
+  let token = null, me = null, es = null;
+  let lastSeq = 0, lastSeen = 0; // delivery tracking
+  let retryTimer = null, retryDelay = 1000;
+  let clockOffset = 0, keepMs = 10 * 60_000; // server clock offset; messages older than keepMs are removed
   const $ = (id) => document.getElementById(id);
   const store = {
     get() { try { return JSON.parse(sessionStorage.getItem('adhocda') || 'null'); } catch { return null; } },
@@ -137,15 +138,17 @@
   }
   function sessionStatus() { setStatus(''); }
 
-  function addNote(text) {
+  function addNote(text, ts) {
     const d = document.createElement('div');
     d.className = 'note'; d.textContent = text;
+    d.dataset.ts = ts || (Date.now() + clockOffset);
     append(d);
   }
 
   function addMsg(m) {
     const d = document.createElement('div');
     d.className = 'msg' + (m.from === me ? ' mine' : '');
+    d.dataset.ts = m.ts;
     const meta = document.createElement('div');
     meta.className = 'meta';
     meta.textContent = (m.from === me ? 'You' : m.from) + ' · ' + time(m.ts);
@@ -166,8 +169,8 @@
 
   function showLogin(msg) {
     closeStream();
-    clearTimeout(retryTimer); clearTimeout(expiryTimer);
-    token = null; me = null; expiresAt = 0; lastSeq = 0; ackedSeq = 0;
+    clearTimeout(retryTimer);
+    token = null; me = null; lastSeq = 0;
     store.clear();
     $('messages').innerHTML = '';
     $('chat').classList.add('hidden');
@@ -176,15 +179,13 @@
     $('loginErr').textContent = msg || '';
   }
 
-  function enterChat(t, name, exp) {
-    token = t; me = name; expiresAt = exp;
-    store.set({ token, name, expiresAt });
+  function enterChat(t, name) {
+    token = t; me = name;
+    store.set({ token, name });
     $('who').textContent = 'You are ' + me;
     $('login').classList.add('hidden');
     $('chat').classList.remove('hidden');
     sessionStatus();
-    clearTimeout(expiryTimer);
-    expiryTimer = setTimeout(() => showLogin('Session ended.'), Math.max(0, expiresAt - Date.now()));
     connect();
   }
 
@@ -195,7 +196,7 @@
     try {
       const r = await post('/api/login', { name: $('name').value, password: $('pwd').value });
       $('pwd').value = '';
-      enterChat(r.token, r.name, r.expiresAt);
+      enterChat(r.token, r.name);
       $('text').focus();
     } catch (err) {
       $('loginErr').textContent = err.message;
@@ -215,7 +216,8 @@
       const m = JSON.parse(ev.data);
       if (m.id) { if (m.id <= lastSeq) return; lastSeq = m.id; } // skip re-sent duplicates
       if (m.type === 'msg') addMsg(m);
-      else if (m.type === 'system') addNote(m.text + ' · ' + time(m.ts));
+      else if (m.type === 'system') addNote(m.text + ' · ' + time(m.ts), m.ts);
+      else if (m.type === 'hello') { clockOffset = m.now - Date.now(); keepMs = m.keepMs; pruneOld(); }
       else if (m.type === 'users') $('who').textContent = 'You are ' + me + ' · Online (' + m.users.length + '): ' + m.users.join(', ');
       else if (m.type === 'ended') showLogin(m.reason === 'full' ? 'Full' : m.reason === 'removed' ? 'You were removed' : 'Session ended.');
     };
@@ -242,17 +244,18 @@
 
   function wake() {
     if (!token) return;
-    if (Date.now() >= expiresAt) return showLogin('Session ended.');
     // Always open a fresh connection: after the phone was in another app the old
     // one can look open but be dead. Anything missed is re-sent by the server.
     closeStream(); retryDelay = 1000; scheduleReconnect(true);
   }
-  // Tell the server what has arrived so it can forget it.
-  setInterval(() => {
-    if (!token || lastSeq <= ackedSeq) return;
-    const upTo = lastSeq;
-    post('/api/ack', { token, seq: upTo }).then(() => { ackedSeq = Math.max(ackedSeq, upTo); }).catch(() => {});
-  }, 5000);
+  // Remove anything older than 10 minutes from the screen.
+  function pruneOld() {
+    const cutoff = Date.now() + clockOffset - keepMs;
+    for (const el of $('messages').querySelectorAll('[data-ts]')) {
+      if (Number(el.dataset.ts) < cutoff) el.remove(); else break;
+    }
+  }
+  setInterval(pruneOld, 5000);
 
   // The server sends a heartbeat every 20s; silence means a dead connection.
   setInterval(() => {
@@ -270,7 +273,7 @@
     const t = $('text').value.trim();
     if (!t || !token) return;
     $('text').value = ''; resize();
-    try { await post('/api/send', { token, text: t, ack: lastSeq }); }
+    try { await post('/api/send', { token, text: t }); }
     catch (err) {
       if (err.status === 401) return showLogin('Session ended.');
       $('text').value = t; resize();
@@ -292,10 +295,10 @@
   // Resume this tab's session if the browser reloaded it (e.g. after app switching).
   (async () => {
     const saved = store.get();
-    if (!saved || !saved.token || saved.expiresAt <= Date.now()) { store.clear(); return; }
+    if (!saved || !saved.token) { store.clear(); return; }
     try {
       const r = await post('/api/session', { token: saved.token });
-      enterChat(saved.token, r.name, r.expiresAt);
+      enterChat(saved.token, r.name);
     } catch { store.clear(); }
   })();
 })();
