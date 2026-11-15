@@ -40,8 +40,10 @@ to the login screen.
 - Live updates use Server-Sent Events (`/api/stream`); messages are sent via `/api/send`
   and broadcast to everyone connected. Only the list of online users is kept in memory.
 - A login lasts 1 hour. Switching apps or a dropped connection doesn't log you out:
-  the page reconnects automatically, and messages sent while you were away (up to 200)
-  are held in memory just for you and delivered when you return, then discarded.
+  the page reconnects automatically (always on returning to the app, and whenever the
+  20-second heartbeat goes quiet). Every message is numbered and held in memory for each
+  person until their browser confirms it arrived, so nothing is lost in a connection that
+  silently died while the phone was in the background. Confirmed messages are discarded.
   Others see you as "left" only after 2 minutes without a connection.
 - Only 2 people can be in the chat at once; a third gets "Chat is full". Someone away
   for more than 2 minutes frees their seat.

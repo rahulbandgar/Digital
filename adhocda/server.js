@@ -1,9 +1,10 @@
 'use strict';
 // Ad-hoc chat server: zero dependencies, no persistence.
 // Messages are relayed to connected clients and never written anywhere.
-// The only buffering is a small per-user, in-memory queue that holds messages
-// while that user's connection is briefly down (e.g. phone switched apps);
-// it is emptied as soon as they reconnect and discarded when they log out.
+// For reliable delivery each event is numbered and held in memory per user
+// until that user's browser confirms it arrived (a phone in the background can
+// leave a dead connection that silently swallows messages). Confirmed events
+// are dropped immediately; everything is discarded when the user logs out.
 
 const http = require('http');
 const fs = require('fs');
@@ -15,7 +16,7 @@ const PASSWORD = process.env.CHAT_PASSWORD || 'digitalasset';
 const SESSION_MS = Number(process.env.SESSION_MINUTES || 60) * 60_000; // login lasts 1 hour
 const AWAY_GRACE_MS = 2 * 60_000; // announce "left" after 2 min without a connection
 const MAX_USERS = Number(process.env.MAX_USERS) || 2; // people allowed in the chat at once
-const MAX_QUEUE = 200; // max messages held for a disconnected user
+const MAX_OUTBOX = 500; // max unconfirmed events held per user
 const MAX_MSG = 2000;
 const MAX_NAME = 32;
 // Behind a hosting proxy (Render, Fly, Railway...), trust X-Forwarded-For for client IP.
@@ -54,7 +55,8 @@ function servePage(res, body) {
   res.end(body);
 }
 
-// token -> { name, expiresAt, res, queue, present, expireTimer, awayTimer }
+// token -> { name, expiresAt, res, outbox, present, expireTimer, awayTimer }
+let seq = 0; // global event number
 const sessions = new Map();
 // ip -> { count, resetAt } for basic login throttling
 const attempts = new Map();
@@ -99,16 +101,28 @@ function seatsTaken(except) {
 }
 
 function deliver(s, event) {
-  const frame = `data: ${JSON.stringify(event)}\n\n`;
-  if (s.res) s.res.write(frame);
-  else if (event.type !== 'users') {
-    s.queue.push(frame);
-    if (s.queue.length > MAX_QUEUE) s.queue.shift();
+  if (event.id === undefined) { // presence updates are sent live only
+    if (s.res) s.res.write(`data: ${JSON.stringify(event)}\n\n`);
+    return;
   }
+  const frame = `id: ${event.id}\ndata: ${JSON.stringify(event)}\n\n`;
+  s.outbox.push({ id: event.id, frame });
+  if (s.outbox.length > MAX_OUTBOX) s.outbox.shift();
+  if (s.res) s.res.write(frame);
 }
 
 function broadcast(event) {
+  if (event.type === 'msg' || event.type === 'system') event.id = ++seq;
   for (const s of sessions.values()) deliver(s, event);
+}
+
+// Browser confirmed it has everything up to `upTo`: forget those events.
+function ack(s, upTo) {
+  const n = Number(upTo);
+  if (!Number.isFinite(n) || n <= 0) return;
+  let i = 0;
+  while (i < s.outbox.length && s.outbox[i].id <= n) i += 1;
+  if (i) s.outbox.splice(0, i);
 }
 
 function announceUsers() {
@@ -139,7 +153,7 @@ function throttled(ip) {
   return a.count > 10;
 }
 
-function openStream(req, res, token, s) {
+function openStream(req, res, token, s, since) {
   if (!s.present && seatsTaken(s) >= MAX_USERS) {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' });
     res.end(`data: ${JSON.stringify({ type: 'ended', reason: 'full' })}\n\n`);
@@ -159,9 +173,9 @@ function openStream(req, res, token, s) {
   s.res = res;
   s.connectedOnce = true;
 
-  // Hand over anything that arrived while this user was disconnected, then forget it.
-  for (const frame of s.queue) res.write(frame);
-  s.queue = [];
+  // Re-send everything this browser hasn't confirmed yet.
+  ack(s, since);
+  for (const e of s.outbox) res.write(e.frame);
 
   if (!s.present) {
     s.present = true;
@@ -169,7 +183,7 @@ function openStream(req, res, token, s) {
   }
   announceUsers();
 
-  const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
+  const ping = setInterval(() => res.write('data: {"type":"ping"}\n\n'), 20_000);
   req.on('close', () => {
     clearInterval(ping);
     if (s.res !== res) return; // already replaced by a newer connection
@@ -255,7 +269,7 @@ const server = http.createServer(async (req, res) => {
       if (seatsTaken() >= MAX_USERS) return send(res, 403, { error: 'Full' });
       const token = crypto.randomBytes(24).toString('hex');
       const expiresAt = Date.now() + SESSION_MS;
-      const s = { id: crypto.randomBytes(8).toString('hex'), joinedAt: Date.now(), name: clean, expiresAt, res: null, queue: [], present: false, awayTimer: null,
+      const s = { id: crypto.randomBytes(8).toString('hex'), joinedAt: Date.now(), name: clean, expiresAt, res: null, outbox: [], present: false, awayTimer: null,
         connectedOnce: false, pendingUntil: Date.now() + 30_000 };
       s.expireTimer = setTimeout(() => endSession(token, 'expired'), SESSION_MS);
       sessions.set(token, s);
@@ -273,16 +287,25 @@ const server = http.createServer(async (req, res) => {
       const token = url.searchParams.get('token');
       const s = sessions.get(token);
       if (!s) return send(res, 401, { error: 'Session ended' });
-      return openStream(req, res, token, s);
+      return openStream(req, res, token, s, url.searchParams.get('since'));
     }
 
     if (req.method === 'POST' && url.pathname === '/api/send') {
-      const { token, text } = await readJson(req);
+      const { token, text, ack: upTo } = await readJson(req);
       const s = sessions.get(token);
       if (!s) return send(res, 401, { error: 'Session ended' });
+      ack(s, upTo);
       const msg = String(text || '').trim().slice(0, MAX_MSG);
       if (!msg) return send(res, 400, { error: 'Empty message' });
       broadcast({ type: 'msg', from: s.name, text: msg, ts: Date.now() });
+      return send(res, 200, { ok: true });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/ack') {
+      const { token, seq: upTo } = await readJson(req);
+      const s = sessions.get(token);
+      if (!s) return send(res, 401, { error: 'Session ended' });
+      ack(s, upTo);
       return send(res, 200, { ok: true });
     }
 
