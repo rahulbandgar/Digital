@@ -252,7 +252,7 @@ const server = http.createServer(async (req, res) => {
         if (s.present) return send(res, 409, { error: 'That name is already in the room' });
         endSession(t); // abandoned session with the same name
       }
-      if (seatsTaken() >= MAX_USERS) return send(res, 403, { error: 'Chat is full' });
+      if (seatsTaken() >= MAX_USERS) return send(res, 403, { error: 'Full' });
       const token = crypto.randomBytes(24).toString('hex');
       const expiresAt = Date.now() + SESSION_MS;
       const s = { id: crypto.randomBytes(8).toString('hex'), joinedAt: Date.now(), name: clean, expiresAt, res: null, queue: [], present: false, awayTimer: null,

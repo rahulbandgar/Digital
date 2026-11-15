@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ad-hoc Chat</title>
+<title>Ad-hoc</title>
 <style>
   :root {
     --bg: #f4f5f7; --panel: #fff; --text: #1d2330; --muted: #6b7385;
@@ -83,19 +83,19 @@
 
 <section id="login">
   <form class="card" id="loginForm" autocomplete="off">
-    <h1>Ad-hoc Chat</h1>
+    <h1>Ad-hoc</h1>
     <label for="name">Display name</label>
     <input id="name" maxlength="32" required>
     <label for="pwd">Password</label>
     <input id="pwd" type="password" required>
-    <button type="submit" id="loginBtn">Join chat</button>
+    <button type="submit" id="loginBtn">Join</button>
     <div class="error" id="loginErr"></div>
   </form>
 </section>
 
 <section id="chat" class="hidden">
   <header>
-    <span class="title">Ad-hoc Chat</span>
+    <span class="title">Ad-hoc</span>
     <span class="who" id="who"></span>
     <span class="status" id="status"></span>
     <button id="leave" type="button">Leave</button>
@@ -213,7 +213,7 @@
       if (m.type === 'msg') addMsg(m);
       else if (m.type === 'system') addNote(m.text + ' · ' + time(m.ts));
       else if (m.type === 'users') $('who').textContent = 'You are ' + me + ' · Online (' + m.users.length + '): ' + m.users.join(', ');
-      else if (m.type === 'ended') showLogin(m.reason === 'full' ? 'Chat is full' : m.reason === 'removed' ? 'You were removed from the chat' : 'Session ended.');
+      else if (m.type === 'ended') showLogin(m.reason === 'full' ? 'Full' : m.reason === 'removed' ? 'You were removed' : 'Session ended.');
     };
     es.onerror = () => { closeStream(); scheduleReconnect(); };
   }

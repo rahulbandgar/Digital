@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Chat Admin</title>
+<title>Admin</title>
 <style>
   :root {
     --bg: #f4f5f7; --panel: #fff; --text: #1d2330; --muted: #6b7385;
@@ -59,7 +59,7 @@
 
 <section id="login">
   <form class="card" id="loginForm" autocomplete="off">
-    <h1>Chat Admin</h1>
+    <h1>Admin</h1>
     <label for="pwd">Admin password</label>
     <input id="pwd" type="password" required>
     <button type="submit" id="loginBtn">Sign in</button>
@@ -69,7 +69,7 @@
 
 <section id="panel" class="hidden">
   <div class="top">
-    <h1>Chat Admin</h1>
+    <h1>Admin</h1>
     <button class="danger" id="removeAll" type="button">Remove everyone</button>
     <button class="ghost" id="signout" type="button">Sign out</button>
   </div>
@@ -120,11 +120,11 @@
 
   function render(users, maxUsers) {
     const inRoom = users.filter((u) => u.status !== 'offline').length;
-    $('count').textContent = 'In chat: ' + inRoom + ' / ' + maxUsers;
+    $('count').textContent = 'Online: ' + inRoom + ' / ' + maxUsers;
     $('removeAll').disabled = users.length === 0;
     const list = $('list'); list.innerHTML = '';
     if (!users.length) {
-      const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'Nobody is in the chat';
+      const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'Nobody is here';
       return list.appendChild(d);
     }
     for (const u of users) {
@@ -140,7 +140,7 @@
       const btn = document.createElement('button'); btn.className = 'danger'; btn.type = 'button';
       btn.textContent = 'Remove';
       btn.onclick = async () => {
-        if (!confirm('Remove ' + u.name + ' from the chat?')) return;
+        if (!confirm('Remove ' + u.name + '?')) return;
         btn.disabled = true;
         try { await post('/api/admin/remove', { token, id: u.id }); } catch {}
         refresh();
@@ -163,7 +163,7 @@
   });
 
   $('removeAll').addEventListener('click', async () => {
-    if (!confirm('Remove everyone from the chat?')) return;
+    if (!confirm('Remove everyone?')) return;
     try { await post('/api/admin/remove', { token, id: '*' }); } catch {}
     refresh();
   });
