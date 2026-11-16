@@ -123,6 +123,12 @@ function broadcast(event) {
   for (const s of sessions.values()) if (s.res) s.res.write(frame);
 }
 
+// Live-only event to everyone except `from` (e.g. typing indicator).
+function sendToOthers(from, event) {
+  const frame = `data: ${JSON.stringify(event)}\n\n`;
+  for (const s of sessions.values()) if (s !== from && s.res) s.res.write(frame);
+}
+
 function announceUsers() {
   broadcast({ type: 'users', users: online() });
 }
@@ -298,6 +304,14 @@ const server = http.createServer(async (req, res) => {
       const msg = String(text || '').trim().slice(0, MAX_MSG);
       if (!msg) return send(res, 400, { error: 'Empty message' });
       broadcast({ type: 'msg', from: s.name, text: msg, ts: Date.now() });
+      return send(res, 200, { ok: true });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/typing') {
+      const { token, typing } = await readJson(req);
+      const s = sessions.get(token);
+      if (!s) return send(res, 401, { error: 'Session ended' });
+      sendToOthers(s, { type: 'typing', from: s.name, typing: !!typing });
       return send(res, 200, { ok: true });
     }
 
