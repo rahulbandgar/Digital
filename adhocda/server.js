@@ -115,7 +115,7 @@ function broadcast(event) {
   if (event.type === 'msg' || event.type === 'system') {
     event.id = ++seq;
     frame = `id: ${event.id}\ndata: ${JSON.stringify(event)}\n\n`;
-    history.push({ id: event.id, ts: event.ts, frame });
+    history.push({ id: event.id, ts: event.ts, frame, type: event.type, from: event.from, text: event.text });
     if (history.length > MAX_HISTORY) history.shift();
   } else {
     frame = `data: ${JSON.stringify(event)}\n\n`; // presence updates are live only
@@ -298,12 +298,18 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/api/send') {
-      const { token, text } = await readJson(req);
+      const { token, text, replyTo } = await readJson(req);
       const s = sessions.get(token);
       if (!s) return send(res, 401, { error: 'Session ended' });
       const msg = String(text || '').trim().slice(0, MAX_MSG);
       if (!msg) return send(res, 400, { error: 'Empty message' });
-      broadcast({ type: 'msg', from: s.name, text: msg, ts: Date.now() });
+      const event = { type: 'msg', from: s.name, text: msg, ts: Date.now() };
+      // Replying to an earlier message: attach a short quote of it, if it still exists.
+      if (replyTo !== undefined && replyTo !== null) {
+        const orig = history.find((e) => e.id === Number(replyTo) && e.type === 'msg');
+        if (orig) event.reply = { id: orig.id, from: orig.from, text: orig.text.slice(0, 300) };
+      }
+      broadcast(event);
       return send(res, 200, { ok: true });
     }
 

@@ -42,6 +42,9 @@ everyone. Removed people see "You were removed" and return to the login screen.
 - Every message is numbered and kept in memory for 8 hours. When someone joins,
   reloads, or reconnects, they receive whatever they haven't seen from the last 8 hours.
   This also covers phones that silently drop the connection while in another app.
+- Reply to a specific message like WhatsApp: swipe it right on a phone, or hover and click
+  the reply arrow on a computer. The reply shows a quote of the original; tapping the quote
+  jumps to it. The server attaches the quote from its in-memory history.
 - While someone types, the other person sees "Name is typing…" above the message box
   (sent live via `/api/typing`, never stored). It clears when they send, empty the box,
   or stop typing for 3 seconds.
